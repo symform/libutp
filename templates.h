@@ -68,6 +68,8 @@ namespace aux
 template <class T>
 struct PACKED_ATTRIBUTE big_endian
 {
+	big_endian() {}
+	big_endian(T i) : m_integer(aux::host_to_network(i)) {}
 	T operator=(T i) { m_integer = aux::host_to_network(i); return i; }
 	operator T() const { return aux::network_to_host(m_integer); }
 private:
