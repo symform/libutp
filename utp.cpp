@@ -2027,7 +2027,7 @@ size_t UTP_ProcessIncoming(UTPSocket *conn, const byte *packet, size_t len, bool
 	// past the point we've sent
 	if (acks <= conn->cur_window_packets) {
 		conn->max_window_user = conn->version == 0
-			? pf->windowsize * PACKET_SIZE : pf1->windowsize;
+			? uint32(pf->windowsize * PACKET_SIZE) : uint32(pf1->windowsize);
 
 		// If max user window is set to 0, then we startup a timer
 		// That will reset it to 1 after 15 seconds.
@@ -2612,7 +2612,7 @@ bool UTP_IsIncomingUTP(UTPGotIncomingConnection *incoming_proc,
 	const PacketFormatV1* p1 = (PacketFormatV1*)buffer;
 
 	const byte version = UTP_IsV1(p1);
-	const uint32 id = (version == 0) ? p->connid : uint32(p1->connid);
+	const uint32 id = (version == 0) ? uint32(p->connid) : uint32(p1->connid);
 
 	if (version == 0 && len < sizeof(PacketFormat)) {
 		LOG_UTPV("recv %s len:%u version:%u too small", addrfmt(addr, addrbuf), (uint)len, version);
@@ -2766,7 +2766,7 @@ bool UTP_HandleICMP(const byte* buffer, size_t len, const struct sockaddr *to, s
 	const PacketFormatV1* p1 = (PacketFormatV1*)buffer;
 
 	const byte version = UTP_IsV1(p1);
-	const uint32 id = (version == 0) ? p->connid : uint32(p1->connid);
+	const uint32 id = (version == 0) ? uint32(p->connid) : uint32(p1->connid);
 
 	for (size_t i = 0; i < g_utp_sockets.GetCount(); ++i) {
 		UTPSocket *conn = g_utp_sockets[i];
