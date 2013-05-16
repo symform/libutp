@@ -667,6 +667,10 @@ struct UTPSocket {
 	uint retransmit_timeout;
 	// The RTO timer will timeout here.
 	uint rto_timeout;
+	// the client specified connect timeout value
+	uint connect_timeout;
+	// the client specified connect send timeout value
+	uint send_timeout;
 
 	// When the window size is set to zero, start this timer. It will send a new packet every 30secs.
 	uint32 zerowindow_time;
@@ -1319,10 +1323,9 @@ void UTPSocket::check_timeouts()
 
 			// Increase RTO
 			const uint new_timeout = retransmit_timeout * 2;
-			if (new_timeout >= 30000 || (state == CS_SYN_SENT && new_timeout > 6000)) {
-				// more than 30 seconds with no reply. kill it.
-				// if we haven't even connected yet, give up sooner. 6 seconds
-				// means 2 tries at the following timeouts: 3, 6 seconds
+			if ((send_timeout > 0 && state != CS_SYN_SENT && new_timeout >= send_timeout) || (connect_timeout > 0 && state == CS_SYN_SENT && new_timeout > connect_timeout)) {
+				// more than 'send_timeout' seconds with no reply. kill it.
+				// if we haven't even connected yet, give up sooner. 'connect_timeout' seconds
 				if (state == CS_FIN_SENT)
 					state = CS_DESTROY;
 				else
@@ -2391,6 +2394,9 @@ UTPSocket *UTP_Create(SendToProc *send_to_proc, void *send_to_userdata, const st
 	conn->send_quota = PACKET_SIZE * 100;
 	conn->cur_window_packets = 0;
 	conn->fast_resend_seq_nr = conn->seq_nr;
+	conn->connect_timeout = 6000;
+	conn->send_timeout = 30000;
+	conn->retransmit_timeout = conn->rto;
 
 	// default to version 1
 	UTP_SetSockopt(conn, SO_UTPVERSION, 1);
@@ -2453,6 +2459,15 @@ bool UTP_GetSockopt(UTPSocket* conn, int opt, int* val)
 	case SO_UTP_MIN_WINDOW_SIZE:
 		*val = conn->min_window_size;
 		return true;
+	case SO_CONTIMEO:
+		*val = conn->connect_timeout;
+		return true;
+	case SO_SNDTIMEO:
+		*val = conn->send_timeout;
+		return true;
+	case SO_RTO:
+		*val = conn->rto;
+		return true;
 	}
 
 	*val = 0;
@@ -2502,6 +2517,18 @@ bool UTP_SetSockopt(UTPSocket* conn, int opt, int val)
 		assert(val > 0);
 		conn->min_window_size = (uint16)val;
 		return true;
+	case SO_CONTIMEO:
+		assert (val > 0);
+		conn->connect_timeout = val;
+		return true;
+	case SO_SNDTIMEO:
+		assert (val > 0);
+		conn->send_timeout = val;
+		return true;
+	case SO_RTO:
+		assert (val > 0);
+		conn->retransmit_timeout = val;
+		return true;
 	}
 
 	return false;
@@ -2539,7 +2566,6 @@ void UTP_Connect(UTPSocket *conn)
 			CUR_DELAY_SIZE, DELAY_BASE_HISTORY);
 
 	// Setup initial timeout timer.
-	conn->retransmit_timeout = 3000;
 	conn->rto_timeout = g_current_ms + conn->retransmit_timeout;
 	conn->last_rcv_win = conn->get_rcv_window();
 
