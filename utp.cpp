@@ -1323,9 +1323,13 @@ void UTPSocket::check_timeouts()
 
 			// Increase RTO
 			const uint new_timeout = retransmit_timeout * 2;
-			if ((send_timeout > 0 && state != CS_SYN_SENT && new_timeout >= send_timeout) || (connect_timeout > 0 && state == CS_SYN_SENT && new_timeout > connect_timeout)) {
-				// more than 'send_timeout' seconds with no reply. kill it.
-				// if we haven't even connected yet, give up sooner. 'connect_timeout' seconds
+
+			// We've already waited ((retransmit_timeout * 2) - rto) milliseconds.
+			const uint waited = new_timeout - rto;
+			if ((state != CS_SYN_SENT && waited >= send_timeout) ||
+				(state == CS_SYN_SENT && waited >= connect_timeout)) {
+				// more than 'send_timeout' milliseconds with no reply. kill it.
+				// if we haven't even connected yet, give up after 'connect_timeout' milliseconds.
 				if (state == CS_FIN_SENT)
 					state = CS_DESTROY;
 				else
@@ -2451,7 +2455,7 @@ bool UTP_GetSockopt(UTPSocket* conn, int opt, int* val)
 		*val = conn->version;
 		return true;
 	case SO_UTP_CCONTROL_TARGET:
-		*val = conn->ccontrol_target;
+		*val = (int)conn->ccontrol_target;
 		return true;
 	case SO_UTP_MAX_CWND_INCREASE_BYTES_PER_RTT:
 		*val = conn->max_cwnd_increase_bytes_per_rtt;
@@ -2459,14 +2463,14 @@ bool UTP_GetSockopt(UTPSocket* conn, int opt, int* val)
 	case SO_UTP_MIN_WINDOW_SIZE:
 		*val = conn->min_window_size;
 		return true;
-	case SO_CONTIMEO:
-		*val = conn->connect_timeout;
+	case SO_UTP_CONTIMEO:
+		*val = (int)conn->connect_timeout;
 		return true;
 	case SO_SNDTIMEO:
-		*val = conn->send_timeout;
+		*val = (int)conn->send_timeout;
 		return true;
-	case SO_RTO:
-		*val = conn->rto;
+	case SO_UTP_RTO:
+		*val = (int)conn->rto;
 		return true;
 	}
 
@@ -2517,17 +2521,17 @@ bool UTP_SetSockopt(UTPSocket* conn, int opt, int val)
 		assert(val > 0);
 		conn->min_window_size = (uint16)val;
 		return true;
-	case SO_CONTIMEO:
-		assert (val > 0);
-		conn->connect_timeout = val;
+	case SO_UTP_CONTIMEO:
+		assert(val >= 0);
+		conn->connect_timeout = (uint)val;
 		return true;
 	case SO_SNDTIMEO:
-		assert (val > 0);
-		conn->send_timeout = val;
+		assert(val >= 0);
+		conn->send_timeout = (uint)val;
 		return true;
-	case SO_RTO:
-		assert (val > 0);
-		conn->retransmit_timeout = val;
+	case SO_UTP_RTO:
+		assert(val >= 0);
+		conn->rto = (uint)val;
 		return true;
 	}
 

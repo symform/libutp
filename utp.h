@@ -38,11 +38,11 @@ struct UTPSocket;
 // Used to get or set the minimum number of bytes to allow for a window size.
 #define SO_UTP_MIN_WINDOW_SIZE 102
 
-// Defines the connect timeout. Should be set on the socket prior to calling connect. The default is 6000.
-#define SO_CONTIMEO 103
+// Defines the connect timeout. Should be set on the socket prior to calling connect.
+#define SO_UTP_CONTIMEO 103
 
 // Defines the initial RTO 
-#define SO_RTO 104
+#define SO_UTP_RTO 104
 
 enum {
 	// socket has reveived syn-ack (notification only for outgoing connection completion)
