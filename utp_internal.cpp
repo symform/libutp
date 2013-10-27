@@ -2837,6 +2837,9 @@ int utp_process_udp(utp_context *ctx, const byte *buffer, size_t len, const stru
 			ctx->log(UTP_LOG_DEBUG, NULL, "recv RST for existing connection");
 			#endif
 
+			if (conn->state == CS_DESTROY || conn->state == CS_DESTROY_DELAY)
+				return 1;
+
 			if (conn->state == CS_FIN_SENT)
 				conn->state = CS_DESTROY;
 			else
