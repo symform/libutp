@@ -61,11 +61,7 @@
 	typedef struct sockaddr_storage SOCKADDR_STORAGE;
 #endif
 
-#ifdef WIN32
-	#define I64u "%I64u"
-#else
-	#define I64u "%Lu"
-#endif
+#define I64u "%llu"
 
 #ifdef WIN32
 	#define utp_snprintf sprintf_s

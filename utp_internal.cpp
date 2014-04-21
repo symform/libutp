@@ -1233,7 +1233,7 @@ void UTPSocket::check_timeouts()
 
 		if (state >= CS_CONNECTED && state <= CS_FIN_SENT) {
 			if ((int)(ctx->current_ms - last_sent_packet) >= KEEPALIVE_INTERVAL) {
-				send_keep_alive();
+				// FIX: disabled since it messes with ST_SYN retransmits. Needs more investigation. send_keep_alive();
 			}
 		}
 		break;
@@ -1839,7 +1839,7 @@ size_t utp_process_incoming(UTPSocket *conn, const byte *packet, size_t len, boo
 	// packet this is. ack_nr is the last acked, seq_nr is the
 	// current. Subtracring 1 makes 0 mean "this is the next
 	// expected packet".
-	const uint seqnr = (pk_seq_nr - conn->ack_nr - 1) & SEQ_NR_MASK;
+	const uint16 seqnr = (pk_seq_nr - conn->ack_nr - 1) & SEQ_NR_MASK;
 
 	// Getting an invalid sequence number?
 	if (seqnr >= REORDER_BUFFER_MAX_SIZE) {
@@ -2837,7 +2837,7 @@ int utp_process_udp(utp_context *ctx, const byte *buffer, size_t len, const stru
 			ctx->log(UTP_LOG_DEBUG, NULL, "recv RST for existing connection");
 			#endif
 
-			if (conn->state == CS_DESTROY || conn->state == CS_DESTROY_DELAY)
+			if (conn->state == CS_DESTROY || conn->state == CS_DESTROY_DELAY || conn->got_fin)
 				return 1;
 
 			if (conn->state == CS_FIN_SENT)
@@ -2882,7 +2882,7 @@ int utp_process_udp(utp_context *ctx, const byte *buffer, size_t len, const stru
 	}
 
 	// We have not found a matching utp_socket, and this isn't a SYN.  Reject it.
-	const uint32 seq_nr = pf1->seq_nr;
+	const uint16 seq_nr = pf1->seq_nr;
 	if (flags != ST_SYN) {
 		ctx->current_ms = utp_call_get_milliseconds(ctx, NULL);
 
@@ -2961,7 +2961,7 @@ int utp_process_udp(utp_context *ctx, const byte *buffer, size_t len, const stru
 		// Create a new UTP socket to handle this new connection
 		UTPSocket *conn = utp_create_socket(ctx);
 		utp_initialize_socket(conn, to, tolen, false, id+1, id);
-		conn->ack_nr = (uint16)seq_nr;
+		conn->ack_nr = seq_nr;
 		conn->seq_nr = (uint16)utp_call_get_random(ctx, NULL);
 		conn->fast_resend_seq_nr = conn->seq_nr;
 		conn->state = CS_CONNECTED;
@@ -3323,8 +3323,8 @@ int utp_get_delays(UTPSocket *conn, uint32 *ours, uint32 *theirs, uint32 *age)
 
 // Close the UTP socket.
 // It is not valid for the upper layer to refer to socket after it is closed.
-// Data will keep to try being delivered after the close.
-void utp_close(UTPSocket *conn)
+// Data will keep to try being delivered after the close if dontLinger is not set.
+void utp_close(UTPSocket *conn, bool dontLinger)
 {
 	assert(conn);
 	if (!conn) return;
@@ -3341,8 +3341,13 @@ void utp_close(UTPSocket *conn)
 	switch(conn->state) {
 	case CS_CONNECTED:
 	case CS_CONNECTED_FULL:
-		conn->state = CS_FIN_SENT;
-		conn->write_outgoing_packet(0, ST_FIN, NULL, 0);
+		if (dontLinger) {
+			conn->state = CS_DESTROY;
+			conn->send_rst(conn->ctx, conn->addr, conn->conn_id_send, conn->seq_nr, (uint16)utp_call_get_random(conn->ctx, NULL));
+		} else {
+			conn->state = CS_FIN_SENT;
+			conn->write_outgoing_packet(0, ST_FIN, NULL, 0);
+		}
 		break;
 
 	case CS_SYN_SENT:
